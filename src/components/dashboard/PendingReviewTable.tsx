@@ -204,111 +204,6 @@ export interface PendingProduct {
   };
 }
 
-const SAMPLE_PENDING_ITEMS: PendingProduct[] = [
-  {
-    _id: "demo-1",
-    name: "Classic Flap Bag",
-    brand: "Channel",
-    description: "Black caviar leather with gold hardware. Comes with original dust bag and authenticity card.",
-    condition: "Excellent",
-    price: 3200,
-    proofOfPurchase: "Bill.pdf",
-    originalPackagingAvailable: true,
-    packaging: "Original box, dust bag and authenticity card included",
-    collectionAddress: "703, Marina Quays East Tower, Dubai, UAE",
-    sellerPhone: "+1 (626) 389-2743",
-    images: ["/dior-bag.webp", "/gucchi-bag.webp", "/dior-bag.webp", "/gucchi-bag.webp"],
-    status: "Pending Review",
-    createdAt: new Date().toISOString(),
-    seller: { name: "Kim Kardashian", email: "kim@example.com", location: "703, Marina Quays East Tower, Dubai, UAE", phone: "+1 (626) 389-2743", payoutsEnabled: true }
-  },
-  {
-    _id: "demo-2",
-    name: "Classic Flap Bag",
-    brand: "Channel",
-    description: "Chanel Classic Double Flap in caviar leather with silver hardware. Pristine corners.",
-    condition: "Pristine",
-    price: 3200,
-    proofOfPurchase: "Bill.pdf",
-    originalPackagingAvailable: true,
-    packaging: "Includes dust bag and serial sticker intact",
-    collectionAddress: "Downtown Boulevard, Standpoint Tower A, Apt 1402, Dubai",
-    sellerPhone: "+971 55 987 6543",
-    images: ["/gucchi-bag.webp", "/dior-bag.webp", "/gucchi-bag.webp"],
-    status: "Pending Review",
-    createdAt: new Date().toISOString(),
-    seller: { name: "Noura Khalid", email: "noura@example.com", location: "Downtown Boulevard, Dubai, UAE", phone: "+971 55 987 6543", payoutsEnabled: true }
-  },
-  {
-    _id: "demo-3",
-    name: "Classic Flap Bag",
-    brand: "Channel",
-    description: "Vintage Chanel Flap in smooth lambskin with 24k gold plated hardware.",
-    condition: "Very Good",
-    price: 3200,
-    proofOfPurchase: "Bill.pdf",
-    originalPackagingAvailable: true,
-    packaging: "Original box and dust bag included",
-    collectionAddress: "Palm Jumeirah, Shoreline 10, Dubai",
-    sellerPhone: "+971 52 456 7890",
-    images: ["/dior-bag.webp", "/gucchi-bag.webp"],
-    status: "Pending Review",
-    createdAt: new Date().toISOString(),
-    seller: { name: "Layla Hassan", email: "layla@example.com", location: "Palm Jumeirah, Dubai, UAE", phone: "+971 52 456 7890", payoutsEnabled: true }
-  },
-  {
-    _id: "demo-4",
-    name: "Classic Flap Bag",
-    brand: "Channel",
-    description: "Chanel Medium Classic Flap in beige caviar leather with gold hardware.",
-    condition: "Like New",
-    price: 3200,
-    proofOfPurchase: "Bill.pdf",
-    originalPackagingAvailable: true,
-    packaging: "Complete set with boutique receipt and box",
-    collectionAddress: "Dubai Marina, Marina Gate 2, Dubai",
-    sellerPhone: "+971 58 112 2334",
-    images: ["/gucchi-bag.webp", "/dior-bag.webp"],
-    status: "Pending Review",
-    createdAt: new Date().toISOString(),
-    seller: { name: "Mariam Salem", email: "mariam@example.com", location: "Dubai Marina, Dubai, UAE", phone: "+971 58 112 2334", payoutsEnabled: true }
-  },
-  {
-    _id: "demo-5",
-    name: "Classic Flap Bag",
-    brand: "Channel",
-    description: "Chanel Classic Flap in black caviar leather with champagne gold hardware.",
-    condition: "Excellent",
-    price: 3200,
-    proofOfPurchase: "Bill.pdf",
-    originalPackagingAvailable: true,
-    packaging: "Original dust bag included",
-    collectionAddress: "Emirates Hills, Sector E, Dubai",
-    sellerPhone: "+971 50 998 8776",
-    images: ["/dior-bag.webp", "/gucchi-bag.webp"],
-    status: "Pending Review",
-    createdAt: new Date().toISOString(),
-    seller: { name: "Fatima Al Suwaidi", email: "fatima@example.com", location: "Emirates Hills, Dubai, UAE", phone: "+971 50 998 8776", payoutsEnabled: true }
-  },
-  {
-    _id: "demo-6",
-    name: "Classic Flap Bag",
-    brand: "Channel",
-    description: "Chanel Classic Flap in burgundy quilted caviar leather.",
-    condition: "Pristine",
-    price: 3200,
-    proofOfPurchase: "Bill.pdf",
-    originalPackagingAvailable: true,
-    packaging: "Full original packaging with invoice",
-    collectionAddress: "City Walk, Building 14, Dubai",
-    sellerPhone: "+971 54 332 1100",
-    images: ["/gucchi-bag.webp", "/dior-bag.webp"],
-    status: "Pending Review",
-    createdAt: new Date().toISOString(),
-    seller: { name: "Hind Al Nuaimi", email: "hind@example.com", location: "City Walk, Dubai, UAE", phone: "+971 54 332 1100", payoutsEnabled: true }
-  },
-];
-
 const REJECT_OPTIONS = [
   {
     id: "Prohibited item",
@@ -342,7 +237,7 @@ const COMMISSION_PERCENT = 12;
 export default function PendingReviewTable() {
   const [items, setItems] = useState<PendingProduct[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedDateFilter, setSelectedDateFilter] = useState("15 Jun, 2026");
+  const [selectedDateFilter, setSelectedDateFilter] = useState("All Time");
   const [statusFilterOverride, setStatusFilterOverride] = useState<string>("All");
   const [selectedItem, setSelectedItem] = useState<PendingProduct | null>(null);
   const [drawerStep, setDrawerStep] = useState<"review" | "reject">("review");
@@ -377,8 +272,8 @@ export default function PendingReviewTable() {
   const [rejectCustomNote, setRejectCustomNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Success dialog
-  const [isLoading, setIsLoading] = useState(false);
+  // Success dialog & loading state
+  const [isLoading, setIsLoading] = useState(true);
   const [actionSuccess, setActionSuccess] = useState<{
     type: "approve" | "reject";
     itemName: string;
@@ -389,19 +284,19 @@ export default function PendingReviewTable() {
     rejectReason?: string;
   } | null>(null);
 
-  // Fetch pending items from backend
+  // Fetch pending items dynamically from backend API
   const fetchPendingItems = async () => {
     setIsLoading(true);
     try {
       const res = await adminApi.getPendingProducts();
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      if (res.success && Array.isArray(res.data)) {
         setItems(res.data);
       } else {
-        setItems(SAMPLE_PENDING_ITEMS);
+        setItems([]);
       }
     } catch (e) {
-      console.warn("Error fetching pending review products, using sample data:", e);
-      setItems(SAMPLE_PENDING_ITEMS);
+      console.error("Error fetching pending review products:", e);
+      setItems([]);
     } finally {
       setIsLoading(false);
     }
@@ -419,15 +314,15 @@ export default function PendingReviewTable() {
     setSelectedRejectReason(REJECT_OPTIONS[2].id);
     setRejectCustomNote("");
     setEditForm({
-      name: item.name,
-      brand: item.brand,
-      description: item.description,
+      name: item.name || "",
+      brand: item.brand || "",
+      description: item.description || "",
       material: item.material || "",
-      condition: item.condition,
+      condition: item.condition || "Excellent",
       packaging: item.packaging || "",
-      price: item.price,
-      collectionAddress: item.collectionAddress || item.seller?.location || "703, Marina Quays East Tower, Dubai, UAE",
-      sellerPhone: item.sellerPhone || item.seller?.phone || "+1 (626) 389-2743",
+      price: item.price || 0,
+      collectionAddress: item.collectionAddress || item.seller?.location || "",
+      sellerPhone: item.sellerPhone || item.seller?.phone || "",
     });
   };
 
@@ -440,15 +335,15 @@ export default function PendingReviewTable() {
     setIsSubmitting(true);
     const itemToSuccess = {
       type: "approve" as const,
-      itemName: editForm.name,
+      itemName: editForm.name || selectedItem.name,
       itemImage: selectedItem.images?.[0] || "/gucchi-bag.webp",
-      brand: editForm.brand,
-      price: editForm.price,
-      id: selectedItem._id.replace("demo-", "") || "347892",
+      brand: editForm.brand || selectedItem.brand,
+      price: editForm.price || selectedItem.price,
+      id: (selectedItem.orderId ? selectedItem.orderId.toString() : selectedItem._id.slice(-6)) || "347892",
     };
 
     try {
-      await adminApi.approveProduct(selectedItem._id, {
+      const res = await adminApi.approveProduct(selectedItem._id, {
         name: editForm.name,
         brand: editForm.brand,
         description: editForm.description,
@@ -460,16 +355,17 @@ export default function PendingReviewTable() {
         sellerPhone: editForm.sellerPhone,
       });
 
-      setItems((prev) => prev.filter((p) => p._id !== selectedItem._id));
-      setActionSuccess(itemToSuccess);
-      setSelectedItem(null);
-      setDrawerStep("review");
-    } catch (e) {
+      if (res.success) {
+        setItems((prev) => prev.filter((p) => p._id !== selectedItem._id));
+        setActionSuccess(itemToSuccess);
+        setSelectedItem(null);
+        setDrawerStep("review");
+      } else {
+        alert(res.message || "Failed to approve listing");
+      }
+    } catch (e: any) {
       console.error("Failed to approve", e);
-      setItems((prev) => prev.filter((p) => p._id !== selectedItem._id));
-      setActionSuccess(itemToSuccess);
-      setSelectedItem(null);
-      setDrawerStep("review");
+      alert(e?.message || "Failed to approve listing");
     } finally {
       setIsSubmitting(false);
     }
@@ -489,38 +385,60 @@ export default function PendingReviewTable() {
       itemImage: selectedItem.images?.[0] || "/gucchi-bag.webp",
       brand: selectedItem.brand,
       price: selectedItem.price,
-      id: selectedItem._id.replace("demo-", "") || "347892",
+      id: (selectedItem.orderId ? selectedItem.orderId.toString() : selectedItem._id.slice(-6)) || "347892",
       rejectReason: selectedRejectReason,
     };
 
     try {
-      await adminApi.rejectProduct(selectedItem._id, finalReason);
+      const res = await adminApi.rejectProduct(selectedItem._id, finalReason);
 
-      setItems((prev) => prev.filter((p) => p._id !== selectedItem._id));
-      setActionSuccess(itemToSuccess);
-      setSelectedItem(null);
-      setDrawerStep("review");
-      setRejectCustomNote("");
-    } catch (e) {
+      if (res.success) {
+        setItems((prev) => prev.filter((p) => p._id !== selectedItem._id));
+        setActionSuccess(itemToSuccess);
+        setSelectedItem(null);
+        setDrawerStep("review");
+        setRejectCustomNote("");
+      } else {
+        alert(res.message || "Failed to reject listing");
+      }
+    } catch (e: any) {
       console.error("Failed to reject", e);
-      setItems((prev) => prev.filter((p) => p._id !== selectedItem._id));
-      setActionSuccess(itemToSuccess);
-      setSelectedItem(null);
-      setDrawerStep("review");
-      setRejectCustomNote("");
+      alert(e?.message || "Failed to reject listing");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const filteredItems = items.filter((p) => {
+    if (statusFilterOverride !== "All" && p.status !== statusFilterOverride && p.status !== "pending_review") {
+      return false;
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      const matchName = p.name.toLowerCase().includes(q);
-      const matchBrand = p.brand.toLowerCase().includes(q);
+      const matchName = p.name ? p.name.toLowerCase().includes(q) : false;
+      const matchBrand = p.brand ? p.brand.toLowerCase().includes(q) : false;
       const matchSeller = p.seller?.name ? p.seller.name.toLowerCase().includes(q) : false;
       const matchOrder = p.orderId ? p.orderId.toString().includes(q) : false;
       if (!matchName && !matchBrand && !matchSeller && !matchOrder) return false;
+    }
+    if (selectedDateFilter !== "All Time" && p.createdAt) {
+      const itemDate = new Date(p.createdAt);
+      const now = new Date();
+      if (selectedDateFilter === "Today") {
+        if (itemDate.toDateString() !== now.toDateString()) return false;
+      } else if (selectedDateFilter === "Yesterday") {
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (itemDate.toDateString() !== yesterday.toDateString()) return false;
+      } else if (selectedDateFilter === "Last 7 days") {
+        const sevenDaysAgo = new Date(now);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        if (itemDate < sevenDaysAgo) return false;
+      } else if (selectedDateFilter === "Last 30 days") {
+        const thirtyDaysAgo = new Date(now);
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        if (itemDate < thirtyDaysAgo) return false;
+      }
     }
     return true;
   });
@@ -550,7 +468,7 @@ export default function PendingReviewTable() {
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 px-3.5 h-10 rounded-full border border-white/10 bg-transparent hover:bg-white/5 active:scale-95 transition-all text-sm text-[#EBEBEB] cursor-pointer shrink-0">
                 <CalendarIcon className="h-4 w-4 text-[#8C8C8C]" />
-                <span>{selectedDateFilter || "15 Jun, 2026"}</span>
+                <span>{selectedDateFilter || "All Time"}</span>
                 <ChevronDown className="h-4 w-4 text-[#8C8C8C] ml-0.5" />
               </button>
             </DropdownMenuTrigger>
@@ -581,9 +499,14 @@ export default function PendingReviewTable() {
 
       {/* Cards Grid */}
       <div className="p-4 sm:p-6">
-        {filteredItems.length === 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-24">
+            <Loader2 className="w-8 h-8 text-[#FFAF2C] animate-spin mb-3" />
+            <p className="text-sm text-[#8C8C8C]">Loading pending reviews...</p>
+          </div>
+        ) : filteredItems.length === 0 ? (
           <div className="text-center py-20 px-4">
-            <img src="/empty-cart.png" alt="No items" className="w-24 h-24 object-contain mx-auto mb-4" />
+            <img src="/empty-cart.png" alt="No items" className="w-24 h-24 object-contain mx-auto mb-4 opacity-70" />
             <h3 className="text-lg font-semibold text-white">No items pending review</h3>
             <p className="text-sm text-[#8C8C8C] mt-1">All submitted seller listings have been reviewed and approved.</p>
           </div>

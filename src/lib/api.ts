@@ -82,6 +82,17 @@ export const adminApi = {
     return request<any[]>("/products/admin/pending-review");
   },
 
+  getProductDetails: async (id: string) => {
+    return request<any>(`/products/${id}`);
+  },
+
+  updateProduct: async (id: string, data: any) => {
+    return request<any>(`/products/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
   approveProduct: async (id: string, data: any) => {
     return request<any>(`/products/admin/${id}/approve`, {
       method: "PATCH",

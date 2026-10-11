@@ -14,8 +14,11 @@ export function formatImageUrl(url?: string): string {
     }
     return url;
   }
-  if (url.startsWith("/")) {
+  if (url.startsWith("/uploads/")) {
     return `http://localhost:5000${url}`;
+  }
+  if (url.startsWith("/")) {
+    return url;
   }
   return `http://localhost:5000/uploads/${url}`;
 }
