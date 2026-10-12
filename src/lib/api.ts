@@ -166,5 +166,39 @@ export const adminApi = {
       body: JSON.stringify({ action }),
     });
   },
+
+  // Admin Profile & Auth
+  getProfile: async () => {
+    return request<any>("/user/profile");
+  },
+
+  changePassword: async (currentPassword: string, newPassword: string, confirmPassword: string) => {
+    return request<any>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
+    });
+  },
+
+  // Notifications
+  getNotifications: async () => {
+    return request<any>("/notifications");
+  },
+
+  getNotificationUnreadCount: async () => {
+    return request<{ unreadCount: number }>("/notifications/unread-count");
+  },
+
+  markAllNotificationsRead: async () => {
+    return request<any>("/notifications/read-all", {
+      method: "PATCH",
+    });
+  },
+
+  markNotificationRead: async (id: string) => {
+    return request<any>(`/notifications/${id}/read`, {
+      method: "PATCH",
+    });
+  },
 };
+
 

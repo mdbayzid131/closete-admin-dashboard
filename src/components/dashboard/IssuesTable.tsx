@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -172,10 +172,10 @@ export interface IssueItem {
   resolved: boolean;
   createdAt: string;
   updatedAt: string;
-  orderId?: string | number;
+  order?: any;
+  orderNumber?: string;
   product?: {
     _id: string;
-    orderId?: number;
     name?: string;
     brand?: string;
     price?: number;
@@ -217,7 +217,32 @@ export default function IssuesTable() {
   const [selectedDateFilter, setSelectedDateFilter] = useState("All Time");
   const [statusFilterOverride, setStatusFilterOverride] = useState<string>("All");
 
-  const [selectedIssue, setSelectedIssue] = useState<IssueItem | null>(null);
+  const [selectedIssueState, setSelectedIssueState] = useState<IssueItem | null>(null);
+  const [activeIssue, setActiveIssue] = useState<IssueItem | null>(null);
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleCloseDrawer = () => {
+    setSelectedIssueState(null);
+    if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    closeTimeoutRef.current = setTimeout(() => {
+      setActiveIssue(null);
+    }, 400);
+  };
+
+  const setSelectedIssue = (issue: IssueItem | null) => {
+    if (issue === null) {
+      handleCloseDrawer();
+    } else {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+      setSelectedIssueState(issue);
+      setActiveIssue(issue);
+    }
+  };
+
+  const selectedIssue = selectedIssueState || activeIssue;
   const [resolveActionType, setResolveActionType] = useState<"make_available" | "delete" | null>(null);
   const [isResolving, setIsResolving] = useState<boolean>(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
@@ -252,12 +277,17 @@ export default function IssuesTable() {
     // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
+      const cleanQ = q.replace(/^#/, "");
       const prodName = issue.product?.name?.toLowerCase() || "";
       const brand = issue.product?.brand?.toLowerCase() || "";
       const reason = issue.reason?.toLowerCase() || "";
       const buyerName = issue.buyer?.name?.toLowerCase() || "";
       const sellerName = issue.seller?.name?.toLowerCase() || "";
-      const orderNum = (issue.orderId || issue.product?.orderId || issue._id)?.toString().toLowerCase();
+      const orderNum = (
+        issue.orderNumber ||
+        issue.order?.orderNumber ||
+        issue._id
+      )?.toString().toLowerCase();
 
       if (
         !prodName.includes(q) &&
@@ -265,30 +295,35 @@ export default function IssuesTable() {
         !reason.includes(q) &&
         !buyerName.includes(q) &&
         !sellerName.includes(q) &&
-        !orderNum.includes(q)
+        !orderNum.includes(q) &&
+        !orderNum.includes(cleanQ)
       ) {
         return false;
       }
     }
 
     // Date filter
-    if (selectedDateFilter !== "All Time" && issue.createdAt) {
-      const itemDate = new Date(issue.createdAt);
-      const now = new Date();
-      if (selectedDateFilter === "Today") {
-        if (itemDate.toDateString() !== now.toDateString()) return false;
-      } else if (selectedDateFilter === "Yesterday") {
-        const yesterday = new Date(now);
-        yesterday.setDate(yesterday.getDate() - 1);
-        if (itemDate.toDateString() !== yesterday.toDateString()) return false;
-      } else if (selectedDateFilter === "Last 7 days") {
-        const sevenDaysAgo = new Date(now);
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        if (itemDate < sevenDaysAgo) return false;
-      } else if (selectedDateFilter === "Last 30 days") {
-        const thirtyDaysAgo = new Date(now);
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        if (itemDate < thirtyDaysAgo) return false;
+    if (selectedDateFilter !== "All Time") {
+      if (!issue.createdAt) {
+        if (selectedDateFilter === "Yesterday") return false;
+      } else {
+        const itemDate = new Date(issue.createdAt);
+        const now = new Date();
+        if (selectedDateFilter === "Today") {
+          if (itemDate.toDateString() !== now.toDateString()) return false;
+        } else if (selectedDateFilter === "Yesterday") {
+          const yesterday = new Date(now);
+          yesterday.setDate(yesterday.getDate() - 1);
+          if (itemDate.toDateString() !== yesterday.toDateString()) return false;
+        } else if (selectedDateFilter === "Last 7 days") {
+          const sevenDaysAgo = new Date(now);
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          if (itemDate < sevenDaysAgo) return false;
+        } else if (selectedDateFilter === "Last 30 days") {
+          const thirtyDaysAgo = new Date(now);
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          if (itemDate < thirtyDaysAgo) return false;
+        }
       }
     }
 
@@ -341,9 +376,9 @@ export default function IssuesTable() {
   };
 
   const getDisplayOrderId = (issue: IssueItem) => {
-    if (issue.orderId) return `#${issue.orderId}`;
-    if (issue.product?.orderId) return `#${issue.product.orderId}`;
-    return `#${issue._id.slice(-6).toUpperCase()}`;
+    if (issue.orderNumber) return issue.orderNumber;
+    if (issue.order?.orderNumber) return issue.order.orderNumber;
+    return issue._id ? `#${issue._id.slice(-6).toUpperCase()}` : "N/A";
   };
 
   return (
@@ -363,8 +398,17 @@ export default function IssuesTable() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search orders.."
-                className="w-full bg-transparent border-white/10 rounded-full h-10 pl-10 pr-4 text-sm focus-visible:ring-[#FFAF2C]/30 text-white placeholder:text-[#8C8C8C]"
+                className="w-full bg-transparent border-white/10 rounded-full h-10 pl-10 pr-9 text-sm focus-visible:ring-[#FFAF2C]/30 text-white placeholder:text-[#8C8C8C]"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8C8C8C] hover:text-white transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Date Filter Dropdown */}
@@ -382,21 +426,6 @@ export default function IssuesTable() {
                 <DropdownMenuItem onClick={() => setSelectedDateFilter("Last 7 days")} className="focus:bg-white/10 cursor-pointer rounded-lg">Last 7 days</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedDateFilter("Last 30 days")} className="focus:bg-white/10 cursor-pointer rounded-lg">Last 30 days</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedDateFilter("All Time")} className="focus:bg-white/10 cursor-pointer rounded-lg">All Time</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Status Filter Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 px-4 h-10 rounded-full border border-white/10 bg-transparent hover:bg-white/5 active:scale-95 transition-all text-sm text-[#EBEBEB] cursor-pointer shrink-0">
-                  <span>{statusFilterOverride || "All"}</span>
-                  <ChevronDown className="h-4 w-4 text-[#8C8C8C]" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40 bg-[#1A1A1D] border-white/10 text-white rounded-xl shadow-2xl p-1">
-                <DropdownMenuItem onClick={() => setStatusFilterOverride("All")} className="focus:bg-white/10 cursor-pointer rounded-lg">All</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilterOverride("Unresolved")} className="focus:bg-white/10 cursor-pointer rounded-lg">Action Required</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilterOverride("Resolved")} className="focus:bg-white/10 cursor-pointer rounded-lg">Resolved</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -588,7 +617,7 @@ export default function IssuesTable() {
       </div>
 
       {/* Details Drawer matching OrderTable Drawer */}
-      <Sheet open={Boolean(selectedIssue)} onOpenChange={(open) => !open && setSelectedIssue(null)}>
+      <Sheet open={Boolean(selectedIssueState)} onOpenChange={(open) => !open && setSelectedIssue(null)}>
         <SheetContent showCloseButton={false} className="w-full max-w-[550px] bg-black border-l border-white/10 text-white p-0 overflow-hidden flex flex-col z-50">
           {selectedIssue && (
             <div className="flex flex-col h-full w-full">
@@ -642,46 +671,46 @@ export default function IssuesTable() {
                 </div>
 
                 {/* Seller / Buyer Cards with equal height */}
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
                   {/* SELLER */}
-                  <div className="flex-1 flex flex-col">
+                  <div className="flex flex-col min-w-0">
                     <div className="text-xs text-[#8C8C8C] uppercase mb-2 font-medium">
                       SELLER
                     </div>
-                    <div className="bg-[#1A1A1D] rounded-xl p-4 sm:p-5 flex-1 flex flex-col">
-                      <div className="font-semibold text-base sm:text-lg mb-2 text-white">
+                    <div className="bg-[#1A1A1D] rounded-xl p-4 sm:p-5 flex-1 flex flex-col min-w-0">
+                      <div className="font-semibold text-base sm:text-lg mb-2 text-white truncate">
                         {selectedIssue.seller?.name || "Seller"}
                       </div>
                       <div className="inline-flex items-center gap-1.5 text-xs text-[#107D2C] font-medium bg-[#107D2C]/10 border border-[#107D2C]/30 px-2.5 py-1 rounded-lg select-none mb-3 self-start">
                         <CheckCircle2 className="w-3.5 h-3.5 text-[#107D2C] shrink-0" strokeWidth={2} />
                         <span>Payout Verified</span>
                       </div>
-                      <div className="mt-auto space-y-2">
-                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C]">
+                      <div className="mt-auto space-y-2 min-w-0">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C] min-w-0">
                           <Phone className="w-4 h-4 shrink-0" /> <span className="truncate">{selectedIssue.seller?.phone || selectedIssue.seller?.contact || "+1 (626) 389-2743"}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C]">
-                          <MapPin className="w-4 h-4 shrink-0" /> <span className="truncate">{selectedIssue.seller?.location || "703, Marina Quays East Tower, Dubai, UAE"}</span>
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C] min-w-0">
+                          <MapPin className="w-4 h-4 shrink-0" /> <span className="truncate" title={selectedIssue.seller?.location}>{selectedIssue.seller?.location || "703, Marina Quays East Tower, Dubai, UAE"}</span>
                         </div>
                       </div>
                     </div>
                   </div>
 
                   {/* BUYER */}
-                  <div className="flex-1 flex flex-col">
+                  <div className="flex flex-col min-w-0">
                     <div className="text-xs text-[#8C8C8C] uppercase mb-2 font-medium">
                       BUYER
                     </div>
-                    <div className="bg-[#1A1A1D] rounded-xl p-4 sm:p-5 flex-1 flex flex-col">
-                      <div className="font-semibold text-base sm:text-lg mb-2 text-white">
+                    <div className="bg-[#1A1A1D] rounded-xl p-4 sm:p-5 flex-1 flex flex-col min-w-0">
+                      <div className="font-semibold text-base sm:text-lg mb-2 text-white truncate">
                         {selectedIssue.buyer?.name || "Buyer"}
                       </div>
-                      <div className="mt-auto space-y-2">
-                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C]">
+                      <div className="mt-auto space-y-2 min-w-0">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C] min-w-0">
                           <Phone className="w-4 h-4 shrink-0" /> <span className="truncate">{selectedIssue.buyer?.phone || selectedIssue.buyer?.contact || "+1 (145) 125-3622"}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C]">
-                          <MapPin className="w-4 h-4 shrink-0" /> <span className="truncate">{selectedIssue.buyer?.location || "2003, One Park Avenue, Sobha Hartland, Dubai, UAE"}</span>
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C] min-w-0">
+                          <MapPin className="w-4 h-4 shrink-0" /> <span className="truncate" title={selectedIssue.buyer?.location}>{selectedIssue.buyer?.location || "2003, One Park Avenue, Sobha Hartland, Dubai, UAE"}</span>
                         </div>
                       </div>
                     </div>

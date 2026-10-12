@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Calendar, ChevronDown, Phone, MapPin, Check, CheckCircle2, ArrowRight, Info, ShoppingBag, ChevronLeft, ShieldCheck, AlertTriangle, AlertCircle, Loader2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -353,6 +353,8 @@ export default function OrderTable({ title, filterStatus, showAllStatuses }: Ord
   const { orders, advanceOrder, resolveIssue, refreshOrders } = useOrders();
 
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [activeOrder, setActiveOrder] = useState<Order | null>(null);
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   // Issue reporting state
@@ -367,22 +369,51 @@ export default function OrderTable({ title, filterStatus, showAllStatuses }: Ord
 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedDateFilter, setSelectedDateFilter] = useState("15 Jun, 2026");
+  const [selectedDateFilter, setSelectedDateFilter] = useState("All Time");
   const [statusFilterOverride, setStatusFilterOverride] = useState<string>("All");
 
   useEffect(() => {
     if (selectedOrderId) {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+      const found = orders.find((o) => o.id === selectedOrderId);
+      if (found) {
+        setActiveOrder(found);
+      }
       setCurrentImageIndex(0);
     }
-  }, [selectedOrderId]);
+  }, [selectedOrderId, orders]);
 
-  // Filter orders based on status & search query
+  const handleCloseDrawer = () => {
+    setSelectedOrderId(null);
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+    }
+    closeTimeoutRef.current = setTimeout(() => {
+      setActiveOrder(null);
+      setSheetView("details");
+    }, 400);
+  };
+
+  // Filter orders based on status, search query, and date
   const filteredOrders = orders.filter((o) => {
-    // 1. Status Filter
-    if (statusFilterOverride !== "All") {
-      if (statusFilterOverride === "Issues") {
-        if (o.status !== "Issue" && o.status !== "Issues") return false;
-      } else if (o.status.toLowerCase() !== statusFilterOverride.toLowerCase()) {
+    // Exclude issues from main fulfillment orders (they are managed in the Issues tab)
+    if (showAllStatuses && (o.status === "Issue" || o.status === "Issues" || !!o.issue)) {
+      return false;
+    }
+
+    // 1. Status Filter (active on All Orders tab)
+    if (showAllStatuses && statusFilterOverride !== "All") {
+      const s = (o.status || "").toLowerCase();
+      const override = statusFilterOverride.toLowerCase();
+
+      if (override === "verified" || override === "authenticated") {
+        if (s !== "verified" && s !== "authenticated") return false;
+      } else if (override === "reserved" || override === "awaiting collection") {
+        if (s !== "reserved" && !s.includes("awaiting")) return false;
+      } else if (s !== override) {
         return false;
       }
     } else if (!showAllStatuses && filterStatus) {
@@ -393,22 +424,73 @@ export default function OrderTable({ title, filterStatus, showAllStatuses }: Ord
       }
     }
 
-    // 2. Search Query (Order ID, Item Name, Seller Name, Buyer Name)
+    // 2. Search Query (Order ID, Item Name, Description, Seller, Buyer, Location)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      const matchId = (o.id || "").toLowerCase().includes(q);
+      const cleanQ = q.replace(/^#/, "");
+      const orderIdStr = (o.id || "").toLowerCase();
+      const backendIdStr = (o.backendId || "").toLowerCase();
+      const matchId = orderIdStr.includes(q) || orderIdStr.includes(cleanQ) || backendIdStr.includes(cleanQ);
       const matchItem = (o.item?.name || "").toLowerCase().includes(q);
+      const matchDesc = (o.item?.desc || "").toLowerCase().includes(q);
       const matchSeller = (o.seller?.name || "").toLowerCase().includes(q);
+      const matchSellerLoc = (o.seller?.location || "").toLowerCase().includes(q);
       const matchBuyer = (o.buyer?.name || "").toLowerCase().includes(q);
-      if (!matchId && !matchItem && !matchSeller && !matchBuyer) {
+      const matchBuyerLoc = (o.buyer?.location || "").toLowerCase().includes(q);
+      const matchStatus = (o.status || "").toLowerCase().includes(q);
+
+      if (
+        !matchId &&
+        !matchItem &&
+        !matchDesc &&
+        !matchSeller &&
+        !matchSellerLoc &&
+        !matchBuyer &&
+        !matchBuyerLoc &&
+        !matchStatus
+      ) {
         return false;
+      }
+    }
+
+    // 3. Date Filter
+    if (selectedDateFilter && selectedDateFilter !== "All Time") {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const startOfYesterday = startOfToday - 24 * 60 * 60 * 1000;
+      const sevenDaysAgo = startOfToday - 7 * 24 * 60 * 60 * 1000;
+      const thirtyDaysAgo = startOfToday - 30 * 24 * 60 * 60 * 1000;
+
+      const orderTime = o.createdAt ? new Date(o.createdAt).getTime() : NaN;
+      const hasValidTimestamp = !isNaN(orderTime);
+
+      const lowerPickup = (o.pickup || "").toLowerCase();
+      const lowerDelivery = (o.delivery || "").toLowerCase();
+
+      if (selectedDateFilter === "Today") {
+        if (hasValidTimestamp) {
+          if (orderTime < startOfToday) return false;
+        } else if (!lowerPickup.includes("today") && !lowerDelivery.includes("today")) {
+          return false;
+        }
+      } else if (selectedDateFilter === "Yesterday") {
+        if (hasValidTimestamp) {
+          if (orderTime < startOfYesterday || orderTime >= startOfToday) return false;
+        } else if (!lowerPickup.includes("yesterday") && !lowerDelivery.includes("yesterday")) {
+          return false;
+        }
+      } else if (selectedDateFilter === "Last 7 days") {
+        if (hasValidTimestamp && orderTime < sevenDaysAgo) return false;
+      } else if (selectedDateFilter === "Last 30 days") {
+        if (hasValidTimestamp && orderTime < thirtyDaysAgo) return false;
       }
     }
 
     return true;
   });
 
-  const selectedOrder = orders.find(o => o.id === selectedOrderId) || null;
+  // Preserve activeOrder during the slide-out exit animation so the drawer content never flashes empty
+  const selectedOrder = (selectedOrderId ? orders.find(o => o.id === selectedOrderId) : null) || activeOrder;
   const successOrder = orders.find(o => o.id === successUpdateOrderId) || null;
 
   const handleProgress = () => {
@@ -417,17 +499,17 @@ export default function OrderTable({ title, filterStatus, showAllStatuses }: Ord
 
     advanceOrder(selectedOrder.id);
     setSuccessUpdateOrderId(selectedOrder.id);
-    setSelectedOrderId(null);
+    handleCloseDrawer();
   };
 
   const handleResolveIssue = (orderId: string) => {
     resolveIssue(orderId, "resolve");
-    setSelectedOrderId(null);
+    handleCloseDrawer();
   };
 
   const handleMoveToQueue = (orderId: string) => {
     resolveIssue(orderId, "queue");
-    setSelectedOrderId(null);
+    handleCloseDrawer();
   };
 
   const currentAvailableOptions = selectedOrder
@@ -571,8 +653,17 @@ export default function OrderTable({ title, filterStatus, showAllStatuses }: Ord
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search orders.."
-                className="w-full bg-transparent border-white/10 rounded-full h-10 pl-10 pr-4 text-sm focus-visible:ring-[#FFAF2C]/30 text-white placeholder:text-[#8C8C8C]"
+                className="w-full bg-transparent border-white/10 rounded-full h-10 pl-10 pr-9 text-sm focus-visible:ring-[#FFAF2C]/30 text-white placeholder:text-[#8C8C8C]"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8C8C8C] hover:text-white transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Date Filter Dropdown */}
@@ -580,37 +671,38 @@ export default function OrderTable({ title, filterStatus, showAllStatuses }: Ord
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 px-3.5 h-10 rounded-full border border-white/10 bg-transparent hover:bg-white/5 active:scale-95 transition-all text-sm text-[#EBEBEB] cursor-pointer shrink-0">
                   <CalendarIcon className="h-4 w-4 text-[#8C8C8C]" />
-                  <span>{selectedDateFilter || "15 Jun, 2026"}</span>
+                  <span>{selectedDateFilter || "All Time"}</span>
                   <ChevronDown className="h-4 w-4 text-[#8C8C8C] ml-0.5" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44 bg-[#1A1A1D] border-white/10 text-white rounded-xl shadow-2xl p-1">
+              <DropdownMenuContent align="end" className="w-44 bg-[#141416] border border-white/10 text-white rounded-xl shadow-2xl p-1">
+                <DropdownMenuItem onClick={() => setSelectedDateFilter("All Time")} className="focus:bg-white/10 cursor-pointer rounded-lg">All Time</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedDateFilter("Today")} className="focus:bg-white/10 cursor-pointer rounded-lg">Today</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedDateFilter("Yesterday")} className="focus:bg-white/10 cursor-pointer rounded-lg">Yesterday</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedDateFilter("Last 7 days")} className="focus:bg-white/10 cursor-pointer rounded-lg">Last 7 days</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSelectedDateFilter("Last 30 days")} className="focus:bg-white/10 cursor-pointer rounded-lg">Last 30 days</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedDateFilter("All Time")} className="focus:bg-white/10 cursor-pointer rounded-lg">All Time</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Status Filter Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 px-4 h-10 rounded-full border border-white/10 bg-transparent hover:bg-white/5 active:scale-95 transition-all text-sm text-[#EBEBEB] cursor-pointer shrink-0">
-                  <span>{statusFilterOverride || (showAllStatuses ? "All" : (Array.isArray(filterStatus) ? "All" : filterStatus || "All"))}</span>
-                  <ChevronDown className="h-4 w-4 text-[#8C8C8C]" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40 bg-[#1A1A1D] border-white/10 text-white rounded-xl shadow-2xl p-1">
-                <DropdownMenuItem onClick={() => setStatusFilterOverride("All")} className="focus:bg-white/10 cursor-pointer rounded-lg">All</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilterOverride("Reserved")} className="focus:bg-white/10 cursor-pointer rounded-lg">Reserved</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilterOverride("Collected")} className="focus:bg-white/10 cursor-pointer rounded-lg">Collected</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilterOverride("Verified")} className="focus:bg-white/10 cursor-pointer rounded-lg">Verified</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilterOverride("Dispatched")} className="focus:bg-white/10 cursor-pointer rounded-lg">Dispatched</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilterOverride("Delivered")} className="focus:bg-white/10 cursor-pointer rounded-lg">Delivered</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setStatusFilterOverride("Issues")} className="focus:bg-white/10 cursor-pointer rounded-lg">Issues</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Status Filter Dropdown — visible only on All Orders tab */}
+            {showAllStatuses && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2 px-4 h-10 rounded-full border border-white/10 bg-transparent hover:bg-white/5 active:scale-95 transition-all text-sm text-[#EBEBEB] cursor-pointer shrink-0">
+                    <span>{statusFilterOverride || "All"}</span>
+                    <ChevronDown className="h-4 w-4 text-[#8C8C8C]" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40 bg-[#141416] border border-white/10 text-white rounded-xl shadow-2xl p-1">
+                  <DropdownMenuItem onClick={() => setStatusFilterOverride("All")} className="focus:bg-white/10 cursor-pointer rounded-lg">All</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilterOverride("Reserved")} className="focus:bg-white/10 cursor-pointer rounded-lg">Reserved</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilterOverride("Collected")} className="focus:bg-white/10 cursor-pointer rounded-lg">Collected</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilterOverride("Verified")} className="focus:bg-white/10 cursor-pointer rounded-lg">Verified</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilterOverride("Dispatched")} className="focus:bg-white/10 cursor-pointer rounded-lg">Dispatched</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilterOverride("Delivered")} className="focus:bg-white/10 cursor-pointer rounded-lg">Delivered</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
 
@@ -791,8 +883,7 @@ export default function OrderTable({ title, filterStatus, showAllStatuses }: Ord
       {/* Order Details Drawer */}
       <Sheet open={selectedOrderId !== null} onOpenChange={(open) => {
         if (!open) {
-          setSelectedOrderId(null);
-          setTimeout(() => setSheetView("details"), 300);
+          handleCloseDrawer();
         }
       }}>
         <SheetContent showCloseButton={false} className="w-full max-w-[550px] bg-black border-l border-white/10 text-white p-0 overflow-hidden flex flex-col">
@@ -802,7 +893,7 @@ export default function OrderTable({ title, filterStatus, showAllStatuses }: Ord
               <div className="px-4 sm:px-6 pt-3 pb-1.5 flex-shrink-0 flex items-center justify-between">
                 <span className="text-2xl font-semibold text-white">Order Details</span>
                 <button
-                  onClick={() => setSelectedOrderId(null)}
+                  onClick={handleCloseDrawer}
                   className="w-6 h-6 flex items-center justify-center rounded-full border-2 border-white hover:border-white transition-colors text-white hover:text-white flex-shrink-0"
                 >
                   <X className="w-3 h-3" strokeWidth={2.5} />
@@ -857,43 +948,43 @@ export default function OrderTable({ title, filterStatus, showAllStatuses }: Ord
                 )}
 
                 {/* Seller / Buyer */}
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1 flex flex-col">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                  <div className="flex flex-col min-w-0">
                     <div className="text-xs text-[#8C8C8C] uppercase mb-2 font-medium">
                       SELLER
                     </div>
-                    <div className="bg-[#1A1A1D] rounded-xl p-4 sm:p-5 flex-1 flex flex-col">
-                      <div className="font-semibold text-base sm:text-lg mb-2 text-white">
+                    <div className="bg-[#1A1A1D] rounded-xl p-4 sm:p-5 flex-1 flex flex-col min-w-0">
+                      <div className="font-semibold text-base sm:text-lg mb-2 text-white truncate">
                         {selectedOrder?.seller.name}
                       </div>
                       <div className="inline-flex items-center gap-1.5 text-xs text-[#107D2C] font-medium bg-[#107D2C]/10 border border-[#107D2C]/30 px-2.5 py-1 rounded-lg select-none mb-3 self-start">
                         <CheckCircle2 className="w-3.5 h-3.5 text-[#107D2C] shrink-0" strokeWidth={2} />
                         <span>Payout Verified</span>
                       </div>
-                      <div className="mt-auto space-y-2">
-                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C]">
+                      <div className="mt-auto space-y-2 min-w-0">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C] min-w-0">
                           <Phone className="w-4 h-4 shrink-0" /> <span className="truncate">{selectedOrder?.seller.phone}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C]">
-                          <MapPin className="w-4 h-4 shrink-0" /> <span className="truncate">{selectedOrder?.seller.location}</span>
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C] min-w-0">
+                          <MapPin className="w-4 h-4 shrink-0" /> <span className="truncate" title={selectedOrder?.seller.location}>{selectedOrder?.seller.location}</span>
                         </div>
                       </div>
                     </div>
                   </div>
-                  <div className="flex-1 flex flex-col">
+                  <div className="flex flex-col min-w-0">
                     <div className="text-xs text-[#8C8C8C] uppercase mb-2 font-medium">
                       BUYER
                     </div>
-                    <div className="bg-[#1A1A1D] rounded-xl p-4 sm:p-5 flex-1 flex flex-col">
-                      <div className="font-semibold text-base sm:text-lg mb-2 text-white">
+                    <div className="bg-[#1A1A1D] rounded-xl p-4 sm:p-5 flex-1 flex flex-col min-w-0">
+                      <div className="font-semibold text-base sm:text-lg mb-2 text-white truncate">
                         {selectedOrder?.buyer.name}
                       </div>
-                      <div className="mt-auto space-y-2">
-                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C]">
+                      <div className="mt-auto space-y-2 min-w-0">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C] min-w-0">
                           <Phone className="w-4 h-4 shrink-0" /> <span className="truncate">{selectedOrder?.buyer.phone}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C]">
-                          <MapPin className="w-4 h-4 shrink-0" /> <span className="truncate">{selectedOrder?.buyer.location}</span>
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-[#8C8C8C] min-w-0">
+                          <MapPin className="w-4 h-4 shrink-0" /> <span className="truncate" title={selectedOrder?.buyer.location}>{selectedOrder?.buyer.location}</span>
                         </div>
                       </div>
                     </div>

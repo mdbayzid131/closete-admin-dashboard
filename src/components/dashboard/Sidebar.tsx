@@ -2,8 +2,9 @@
 import React from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LogOut, X } from "lucide-react";
+import { clearAuthToken } from "@/lib/api";
 
 // Exact SVG Icons extracted directly from the Figma export files in "Closete UI Design File(3)"
 
@@ -327,7 +328,16 @@ interface SidebarProps {
 
 export default function Sidebar({ active, mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const current = active ?? pathname ?? "";
+
+  const handleLogout = () => {
+    clearAuthToken();
+    try {
+      localStorage.removeItem("admin_user");
+    } catch {}
+    router.push("/login");
+  };
 
   const navContent = (
     <>
@@ -354,13 +364,13 @@ export default function Sidebar({ active, mobileOpen = false, onMobileClose }: S
       </nav>
 
       <div className="p-3 mt-auto">
-        <Link
-          href="/"
-          className="flex items-center gap-3 px-3 py-3 text-sm font-medium transition-colors rounded-xl text-red-500/80 hover:bg-red-500/10 hover:text-red-500"
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3 py-3 text-sm font-medium transition-colors rounded-xl text-red-500/80 hover:bg-red-500/10 hover:text-red-500 text-left"
         >
           <LogOut className="h-5 w-5" />
           <span>Logout</span>
-        </Link>
+        </button>
       </div>
     </>
   );

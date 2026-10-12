@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   CheckCircle2,
   XCircle,
@@ -173,7 +173,6 @@ function PdfSolidIcon({ className }: { className?: string }) {
 
 export interface PendingProduct {
   _id: string;
-  orderId?: number;
   name: string;
   brand: string;
   description: string;
@@ -239,10 +238,39 @@ export default function PendingReviewTable() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDateFilter, setSelectedDateFilter] = useState("All Time");
   const [statusFilterOverride, setStatusFilterOverride] = useState<string>("All");
-  const [selectedItem, setSelectedItem] = useState<PendingProduct | null>(null);
+  const [selectedItemState, setSelectedItemState] = useState<PendingProduct | null>(null);
+  const [activeItem, setActiveItem] = useState<PendingProduct | null>(null);
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [drawerStep, setDrawerStep] = useState<"review" | "reject">("review");
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [isEditingDetails, setIsEditingDetails] = useState(false);
+
+  const handleCloseDrawer = () => {
+    setSelectedItemState(null);
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+    }
+    closeTimeoutRef.current = setTimeout(() => {
+      setActiveItem(null);
+      setDrawerStep("review");
+      setIsEditingDetails(false);
+    }, 400);
+  };
+
+  const setSelectedItem = (item: PendingProduct | null) => {
+    if (item === null) {
+      handleCloseDrawer();
+    } else {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+      setSelectedItemState(item);
+      setActiveItem(item);
+    }
+  };
+
+  const selectedItem = selectedItemState || activeItem;
 
   // Edit / Moderation state
   const [editForm, setEditForm] = useState<{
@@ -339,7 +367,7 @@ export default function PendingReviewTable() {
       itemImage: selectedItem.images?.[0] || "/gucchi-bag.webp",
       brand: editForm.brand || selectedItem.brand,
       price: editForm.price || selectedItem.price,
-      id: (selectedItem.orderId ? selectedItem.orderId.toString() : selectedItem._id.slice(-6)) || "347892",
+      id: selectedItem._id.slice(-6).toUpperCase(),
     };
 
     try {
@@ -385,7 +413,7 @@ export default function PendingReviewTable() {
       itemImage: selectedItem.images?.[0] || "/gucchi-bag.webp",
       brand: selectedItem.brand,
       price: selectedItem.price,
-      id: (selectedItem.orderId ? selectedItem.orderId.toString() : selectedItem._id.slice(-6)) || "347892",
+      id: selectedItem._id.slice(-6).toUpperCase(),
       rejectReason: selectedRejectReason,
     };
 
@@ -418,26 +446,29 @@ export default function PendingReviewTable() {
       const matchName = p.name ? p.name.toLowerCase().includes(q) : false;
       const matchBrand = p.brand ? p.brand.toLowerCase().includes(q) : false;
       const matchSeller = p.seller?.name ? p.seller.name.toLowerCase().includes(q) : false;
-      const matchOrder = p.orderId ? p.orderId.toString().includes(q) : false;
-      if (!matchName && !matchBrand && !matchSeller && !matchOrder) return false;
+      if (!matchName && !matchBrand && !matchSeller) return false;
     }
-    if (selectedDateFilter !== "All Time" && p.createdAt) {
-      const itemDate = new Date(p.createdAt);
-      const now = new Date();
-      if (selectedDateFilter === "Today") {
-        if (itemDate.toDateString() !== now.toDateString()) return false;
-      } else if (selectedDateFilter === "Yesterday") {
-        const yesterday = new Date(now);
-        yesterday.setDate(yesterday.getDate() - 1);
-        if (itemDate.toDateString() !== yesterday.toDateString()) return false;
-      } else if (selectedDateFilter === "Last 7 days") {
-        const sevenDaysAgo = new Date(now);
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        if (itemDate < sevenDaysAgo) return false;
-      } else if (selectedDateFilter === "Last 30 days") {
-        const thirtyDaysAgo = new Date(now);
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        if (itemDate < thirtyDaysAgo) return false;
+    if (selectedDateFilter !== "All Time") {
+      if (!p.createdAt) {
+        if (selectedDateFilter === "Yesterday") return false;
+      } else {
+        const itemDate = new Date(p.createdAt);
+        const now = new Date();
+        if (selectedDateFilter === "Today") {
+          if (itemDate.toDateString() !== now.toDateString()) return false;
+        } else if (selectedDateFilter === "Yesterday") {
+          const yesterday = new Date(now);
+          yesterday.setDate(yesterday.getDate() - 1);
+          if (itemDate.toDateString() !== yesterday.toDateString()) return false;
+        } else if (selectedDateFilter === "Last 7 days") {
+          const sevenDaysAgo = new Date(now);
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          if (itemDate < sevenDaysAgo) return false;
+        } else if (selectedDateFilter === "Last 30 days") {
+          const thirtyDaysAgo = new Date(now);
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          if (itemDate < thirtyDaysAgo) return false;
+        }
       }
     }
     return true;
@@ -459,8 +490,17 @@ export default function PendingReviewTable() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search orders.."
-              className="w-full bg-transparent border-white/10 rounded-full h-10 pl-10 pr-4 text-sm focus-visible:ring-[#FFAF2C]/30 text-white placeholder:text-[#8C8C8C]"
+              className="w-full bg-transparent border-white/10 rounded-full h-10 pl-10 pr-9 text-sm focus-visible:ring-[#FFAF2C]/30 text-white placeholder:text-[#8C8C8C]"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8C8C8C] hover:text-white transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Date Filter Dropdown */}
@@ -478,20 +518,6 @@ export default function PendingReviewTable() {
               <DropdownMenuItem onClick={() => setSelectedDateFilter("Last 7 days")} className="focus:bg-white/10 cursor-pointer rounded-lg">Last 7 days</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSelectedDateFilter("Last 30 days")} className="focus:bg-white/10 cursor-pointer rounded-lg">Last 30 days</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSelectedDateFilter("All Time")} className="focus:bg-white/10 cursor-pointer rounded-lg">All Time</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Status Filter Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 px-4 h-10 rounded-full border border-white/10 bg-transparent hover:bg-white/5 active:scale-95 transition-all text-sm text-[#EBEBEB] cursor-pointer shrink-0">
-                <span>{statusFilterOverride || "All"}</span>
-                <ChevronDown className="h-4 w-4 text-[#8C8C8C]" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40 bg-[#1A1A1D] border-white/10 text-white rounded-xl shadow-2xl p-1">
-              <DropdownMenuItem onClick={() => setStatusFilterOverride("All")} className="focus:bg-white/10 cursor-pointer rounded-lg">All</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilterOverride("Pending Review")} className="focus:bg-white/10 cursor-pointer rounded-lg">Pending Review</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -577,7 +603,7 @@ export default function PendingReviewTable() {
       </div>
 
       {/* Review Listing Drawer matching exact Dashboard Design */}
-      <Sheet open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
+      <Sheet open={Boolean(selectedItemState)} onOpenChange={(open) => !open && setSelectedItem(null)}>
         <SheetContent showCloseButton={false} className="w-full max-w-[550px] bg-black border-l border-white/10 text-white p-0 overflow-hidden flex flex-col z-50">
           {selectedItem && (
             drawerStep === "reject" ? (

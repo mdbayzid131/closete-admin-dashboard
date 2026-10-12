@@ -20,12 +20,13 @@ export function ProductImageSlider({
 }: ProductImageSliderProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+  const validImages = Array.isArray(images) ? images.filter(Boolean) : [];
   const galleryImages =
-    images && images.length > 0
-      ? images.filter(Boolean)
+    validImages.length > 0
+      ? validImages
       : singleImageFallback
       ? [singleImageFallback]
-      : ["/dior-bag.webp", "/gucchi-bag.webp", "/dior-bag.webp", "/gucchi-bag.webp"];
+      : [];
 
   const hasMultiple = galleryImages.length > 1;
 
@@ -72,7 +73,7 @@ export function ProductImageSlider({
           </>
         ) : (
           <img
-            src={formatImageUrl(galleryImages[0])}
+            src={formatImageUrl(galleryImages[0] || "/gucchi-bag.webp")}
             alt={itemName}
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).src = "/gucchi-bag.webp";

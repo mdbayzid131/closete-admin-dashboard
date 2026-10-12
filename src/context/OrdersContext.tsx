@@ -13,6 +13,7 @@ export type Order = {
   id: string;
   backendId?: string;
   productId?: string;
+  createdAt?: string;
   item: {
     name: string;
     desc: string;
@@ -121,9 +122,7 @@ function mapBackendOrderToOrder(raw: any): Order {
       : ["/gucchi-bag.webp"];
 
   return {
-    id: raw.orderNumber
-      ? `#${raw.orderNumber.replace(/CLT-/, "")}`
-      : `#${raw._id?.slice(-6)}`,
+    id: raw.orderNumber || `#${raw._id?.slice(-6)}`,
     backendId: raw._id,
     productId: prod._id || (typeof raw.product === 'string' ? raw.product : undefined),
     item: {
@@ -157,6 +156,7 @@ function mapBackendOrderToOrder(raw: any): Order {
     delivery: raw.estimatedDeliveryAt
       ? new Date(raw.estimatedDeliveryAt).toLocaleDateString()
       : "Tomorrow",
+    createdAt: raw.createdAt || raw.updatedAt || new Date().toISOString(),
     status: statusLabel,
     statusColor,
     statusBg,
