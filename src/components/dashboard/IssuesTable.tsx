@@ -20,6 +20,7 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetDescription,
 } from "@/components/ui/sheet";
 import {
   Dialog,
@@ -623,9 +624,14 @@ export default function IssuesTable() {
             <div className="flex flex-col h-full w-full">
               {/* Sticky Header */}
               <div className="px-4 sm:px-6 pt-4 pb-2 flex-shrink-0 flex items-center justify-between">
-                <SheetTitle className="text-2xl font-semibold text-white">
-                  Issue Details
-                </SheetTitle>
+                <div>
+                  <SheetTitle className="text-2xl font-semibold text-white">
+                    Issue Details
+                  </SheetTitle>
+                  <SheetDescription className="sr-only">
+                    Issue details and resolution
+                  </SheetDescription>
+                </div>
                 <button
                   type="button"
                   onClick={() => setSelectedIssue(null)}

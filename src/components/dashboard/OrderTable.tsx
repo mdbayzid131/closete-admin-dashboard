@@ -13,6 +13,7 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetDescription,
 } from "@/components/ui/sheet";
 import {
   Tooltip,
@@ -606,7 +607,6 @@ export default function OrderTable({ title, filterStatus, showAllStatuses }: Ord
         return;
       }
 
-      setSuccessUpdateOrderId(selectedOrder.id);
       await refreshOrders();
       setSelectedOrderId(null);
       setSheetView("details");
@@ -891,7 +891,10 @@ export default function OrderTable({ title, filterStatus, showAllStatuses }: Ord
             <div className="flex flex-col h-full w-full">
               {/* Sticky Header */}
               <div className="px-4 sm:px-6 pt-3 pb-1.5 flex-shrink-0 flex items-center justify-between">
-                <span className="text-2xl font-semibold text-white">Order Details</span>
+                <div>
+                  <SheetTitle className="text-2xl font-semibold text-white">Order Details</SheetTitle>
+                  <SheetDescription className="sr-only">Order details and fulfillment status</SheetDescription>
+                </div>
                 <button
                   onClick={handleCloseDrawer}
                   className="w-6 h-6 flex items-center justify-center rounded-full border-2 border-white hover:border-white transition-colors text-white hover:text-white flex-shrink-0"
@@ -1144,8 +1147,8 @@ export default function OrderTable({ title, filterStatus, showAllStatuses }: Ord
               {/* Sticky Header */}
               <div className="px-4 sm:px-6 pt-6 pb-4 border-b border-white/5 flex-shrink-0 flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-bold mb-1 text-white">Report Issue</h2>
-                  <div className="text-sm text-[#8C8C8C] font-normal">Select the issue related to this order</div>
+                  <SheetTitle className="text-xl sm:text-2xl font-bold mb-1 text-white">Report Issue</SheetTitle>
+                  <SheetDescription className="text-sm text-[#8C8C8C] font-normal">Select the issue related to this order</SheetDescription>
                 </div>
                 {/* Close Button */}
                 <button
@@ -1313,9 +1316,9 @@ export default function OrderTable({ title, filterStatus, showAllStatuses }: Ord
         onOpenChange={(open) => !open && setIssueStep("form")}
         type="issue"
         title="Issue reported"
-        description="Order status updated successfully"
+        description="Order moved to issues queue successfully"
         infoRows={[
-          { label: "Report Reference", value: "#RP-992-K", valueColor: "text-[#FFAF2C]" },
+          { label: "Report Reference", value: selectedOrder?.id || "#RP-992-K", valueColor: "text-[#FFAF2C]" },
           { label: "Update Time", value: getCurrentFormattedTime(), valueColor: "text-white" },
         ]}
         buttonText="Back To Dashboard"

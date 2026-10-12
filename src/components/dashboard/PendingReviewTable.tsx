@@ -26,6 +26,7 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetDescription,
 } from "@/components/ui/sheet";
 import {
   Dialog,
@@ -625,9 +626,9 @@ export default function PendingReviewTable() {
                         Reject Listing
                       </SheetTitle>
                     </div>
-                    <p className="text-xs text-[#8C8C8C] pl-7">
+                    <SheetDescription className="text-xs text-[#8C8C8C] pl-7">
                       Select a reason for rejecting this listing.
-                    </p>
+                    </SheetDescription>
                   </div>
 
                   <button
@@ -761,18 +762,23 @@ export default function PendingReviewTable() {
               <div className="flex flex-col h-full w-full">
                 {/* Sticky Header */}
                 <div className="px-4 sm:px-6 pt-3 pb-1.5 flex-shrink-0 flex items-center justify-between">
-                  <SheetTitle className="text-2xl font-semibold text-white">
-                    Review Listing
-                </SheetTitle>
-                <button
-                  type="button"
-                  onClick={() => setSelectedItem(null)}
-                  className="w-6 h-6 flex items-center justify-center rounded-full border-2 border-white hover:border-white transition-colors text-white hover:text-white flex-shrink-0 cursor-pointer"
-                  aria-label="Close"
-                >
-                  <X className="w-3 h-3" strokeWidth={2.5} />
-                </button>
-              </div>
+                  <div>
+                    <SheetTitle className="text-2xl font-semibold text-white">
+                      Review Listing
+                    </SheetTitle>
+                    <SheetDescription className="sr-only">
+                      Review seller listing details
+                    </SheetDescription>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedItem(null)}
+                    className="w-6 h-6 flex items-center justify-center rounded-full border-2 border-white hover:border-white transition-colors text-white hover:text-white flex-shrink-0 cursor-pointer"
+                    aria-label="Close"
+                  >
+                    <X className="w-3 h-3" strokeWidth={2.5} />
+                  </button>
+                </div>
 
               {/* Scrollable Body */}
               <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 pb-6 no-scrollbar space-y-4">
