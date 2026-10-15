@@ -310,13 +310,13 @@ function IssuesIcon({ className }: { className?: string }) {
 }
 
 const items = [
+  { href: "/pending-review", label: "Pending Review", Icon: PendingReviewIcon },
   { href: "/all-orders", label: "All Orders", Icon: AllOrdersIcon },
   { href: "/awaiting-collection", label: "Awaiting Collection", Icon: AwaitingCollectionIcon },
   { href: "/collected", label: "Collected", Icon: CollectedIcon },
   { href: "/verified", label: "Verified", Icon: VerifiedIcon },
   { href: "/dispatched", label: "Dispatched", Icon: DispatchedIcon },
   { href: "/delivered", label: "Delivered", Icon: DeliveredIcon },
-  { href: "/pending-review", label: "Pending Review", Icon: PendingReviewIcon },
   { href: "/issues", label: "Issues", Icon: IssuesIcon },
 ];
 
