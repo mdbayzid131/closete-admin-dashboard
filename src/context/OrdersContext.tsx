@@ -200,26 +200,42 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const fetchOrders = useCallback(async () => {
-    setIsLoading(true);
+  const fetchOrders = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const res = await adminApi.getAllOrders();
       if (res.success && res.data && Array.isArray(res.data)) {
         const mapped = res.data.map(mapBackendOrderToOrder);
         setOrders(mapped);
-      } else {
+      } else if (!silent) {
         setOrders([]);
       }
     } catch (e) {
       console.warn("Error fetching orders:", e);
-      setOrders([]);
+      if (!silent) setOrders([]);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchOrders();
+
+    const handleRefresh = () => {
+      fetchOrders(true);
+    };
+
+    window.addEventListener("closete:refresh-orders", handleRefresh);
+    window.addEventListener("focus", handleRefresh);
+    const interval = setInterval(() => {
+      fetchOrders(true);
+    }, 15000);
+
+    return () => {
+      window.removeEventListener("closete:refresh-orders", handleRefresh);
+      window.removeEventListener("focus", handleRefresh);
+      clearInterval(interval);
+    };
   }, [fetchOrders]);
 
   const advanceOrder = async (orderId: string) => {

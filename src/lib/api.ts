@@ -200,6 +200,16 @@ export const adminApi = {
       method: "PATCH",
     });
   },
+
+  registerDeviceToken: async (registrationToken: string) => {
+    return request<any>("/notifications/devices", {
+      method: "POST",
+      body: JSON.stringify({
+        registrationToken,
+        platform: "web",
+      }),
+    });
+  },
 };
 
 

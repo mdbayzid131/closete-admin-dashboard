@@ -11,7 +11,10 @@ import {
   ChevronRight,
   Inbox,
 } from "lucide-react";
-import { adminApi } from "@/lib/api";
+import { adminApi, getAuthToken } from "@/lib/api";
+import { requestWebPushToken, onForegroundMessage } from "@/lib/firebase";
+import { getSocket } from "@/lib/socket";
+
 export type AlertItem = {
   id: string;
   backendId?: string;
@@ -27,6 +30,7 @@ export type AlertItem = {
 let cachedAlerts: AlertItem[] | null = null;
 let lastCacheTime = 0;
 let inFlightAlertsPromise: Promise<AlertItem[]> | null = null;
+const recentDesktopNotifications = new Map<string, number>();
 
 export default function TopBarNotifications() {
   const router = useRouter();
@@ -34,6 +38,8 @@ export default function TopBarNotifications() {
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">("default");
+  const [isRegisteringPush, setIsRegisteringPush] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Load read IDs from localStorage on mount
@@ -44,89 +50,239 @@ export default function TopBarNotifications() {
         setReadIds(new Set(JSON.parse(stored)));
       }
     } catch {}
+
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setPushPermission(Notification.permission);
+    } else {
+      setPushPermission("unsupported");
+    }
   }, []);
 
-  // Fetch notifications directly from backend API (deduplicated)
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadAlerts() {
-      const now = Date.now();
-      if (cachedAlerts && now - lastCacheTime < 4000) {
-        if (isMounted) setAlerts(cachedAlerts);
-        return;
-      }
-
-      if (inFlightAlertsPromise) {
-        try {
-          const res = await inFlightAlertsPromise;
-          if (isMounted) setAlerts(res);
-        } catch {}
-        return;
-      }
-
-      inFlightAlertsPromise = (async () => {
-        const collectedAlerts: AlertItem[] = [];
-
-        // Direct in-app notifications from backend API only - no synthesized alerts
-        try {
-          const notifRes = await adminApi.getNotifications();
-          const list = Array.isArray(notifRes.data)
-            ? notifRes.data
-            : Array.isArray(notifRes.data?.result)
-              ? notifRes.data.result
-              : [];
-
-          list.forEach((n: any) => {
-            const rawId = (n._id || n.id)?.toString();
-            const notifType = (n.type || "").toLowerCase();
-            let alertType: AlertItem["type"] = "system";
-            let link = "/all-orders";
-
-            if (notifType.includes("review") || notifType.includes("product")) {
-              alertType = "review";
-              link = "/pending-review";
-            } else if (notifType.includes("issue") || notifType.includes("dispute")) {
-              alertType = "issue";
-              link = "/issues";
-            } else if (notifType.includes("order")) {
-              alertType = "order";
-              link = "/all-orders";
-            }
-
-            collectedAlerts.push({
-              id: `backend-${rawId}`,
-              backendId: rawId,
-              type: alertType,
-              title: n.title || "Notification",
-              description: n.body || n.message || "",
-              time: n.createdAt
-                ? new Date(n.createdAt).toLocaleDateString()
-                : "Recent",
-              link: n.link || n.url || link,
-              read: Boolean(n.readAt || n.read || n.isRead),
-            });
-          });
-        } catch (err) {
-          console.warn("Could not load backend notifications:", err);
-        }
-
-        cachedAlerts = collectedAlerts;
-        lastCacheTime = Date.now();
-        return collectedAlerts;
-      })().finally(() => {
-        inFlightAlertsPromise = null;
-      });
-
-      try {
-        const result = await inFlightAlertsPromise;
-        if (isMounted) {
-          setAlerts(result);
-        }
-      } catch {}
+  const loadAlerts = async (force = false) => {
+    const now = Date.now();
+    if (!force && cachedAlerts && now - lastCacheTime < 4000) {
+      setAlerts(cachedAlerts);
+      return;
     }
 
+    if (inFlightAlertsPromise) {
+      try {
+        const res = await inFlightAlertsPromise;
+        setAlerts(res);
+      } catch {}
+      return;
+    }
+
+    inFlightAlertsPromise = (async () => {
+      const collectedAlerts: AlertItem[] = [];
+
+      try {
+        const notifRes = await adminApi.getNotifications();
+        const list = Array.isArray(notifRes.data)
+          ? notifRes.data
+          : Array.isArray(notifRes.data?.result)
+            ? notifRes.data.result
+            : [];
+
+        list.forEach((n: any) => {
+          const rawId = (n._id || n.id)?.toString();
+          const notifType = (n.type || "").toLowerCase();
+          let alertType: AlertItem["type"] = "system";
+          let link = "/all-orders";
+
+          if (notifType.includes("review") || notifType.includes("product") || notifType.includes("item_listed")) {
+            alertType = "review";
+            link = "/pending-review";
+          } else if (notifType.includes("issue") || notifType.includes("dispute")) {
+            alertType = "issue";
+            link = "/issues";
+          } else if (notifType.includes("order") || notifType.includes("payment")) {
+            alertType = "order";
+            link = "/all-orders";
+          }
+
+          collectedAlerts.push({
+            id: `backend-${rawId}`,
+            backendId: rawId,
+            type: alertType,
+            title: n.title || "Notification",
+            description: n.body || n.message || "",
+            time: n.createdAt
+              ? new Date(n.createdAt).toLocaleDateString()
+              : "Recent",
+            link: n.link || n.url || link,
+            read: Boolean(n.readAt || n.read || n.isRead),
+          });
+        });
+      } catch (err) {
+        console.warn("Could not load backend notifications:", err);
+      }
+
+      cachedAlerts = collectedAlerts;
+      lastCacheTime = Date.now();
+      return collectedAlerts;
+    })().finally(() => {
+      inFlightAlertsPromise = null;
+    });
+
+    try {
+      const result = await inFlightAlertsPromise;
+      setAlerts(result);
+    } catch {}
+  };
+
+  // Fetch notifications on mount and set up 25s polling
+  useEffect(() => {
     loadAlerts();
+    const interval = setInterval(() => {
+      loadAlerts(true);
+    }, 25000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Handle FCM Web Push registration
+  const handleEnablePush = async () => {
+    setIsRegisteringPush(true);
+    try {
+      const token = await requestWebPushToken();
+      if (token && getAuthToken()) {
+        await adminApi.registerDeviceToken(token);
+        console.log("FCM Web Push token successfully registered with backend");
+      }
+      if (typeof window !== "undefined" && "Notification" in window) {
+        setPushPermission(Notification.permission);
+      }
+    } catch (err) {
+      console.warn("Failed to register web push token:", err);
+    } finally {
+      setIsRegisteringPush(false);
+    }
+  };
+
+  // Auto-register if permission already granted and token exists
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      requestWebPushToken().then((token) => {
+        if (token && getAuthToken()) {
+          adminApi.registerDeviceToken(token).catch(() => {});
+        }
+      });
+    }
+  }, []);
+
+  // Deduplicated Desktop Notifications & Table Refresh Helper
+  const showDesktopNotification = (title: string, body: string, dedupeKey?: string) => {
+    if (
+      typeof window === "undefined" ||
+      !("Notification" in window) ||
+      Notification.permission !== "granted"
+    ) {
+      return;
+    }
+
+    const tag = dedupeKey || `${title}::${body}`;
+    const now = Date.now();
+    const lastTime = recentDesktopNotifications.get(tag);
+
+    // If identical notification was already displayed within the last 10 seconds, ignore duplicate
+    if (lastTime && now - lastTime < 10000) {
+      return;
+    }
+    recentDesktopNotifications.set(tag, now);
+
+    // Clean old entries
+    if (recentDesktopNotifications.size > 50) {
+      for (const [k, t] of recentDesktopNotifications.entries()) {
+        if (now - t > 30000) recentDesktopNotifications.delete(k);
+      }
+    }
+
+    try {
+      const notif = new Notification(title, {
+        body,
+        icon: "/icon.png",
+        tag,
+      });
+      notif.onclick = () => {
+        window.focus();
+      };
+    } catch (e) {
+      console.warn("Could not display notification:", e);
+    }
+  };
+
+  const broadcastTableRefreshes = (type?: string, screen?: string) => {
+    if (typeof window === "undefined") return;
+    const t = (type || "").toLowerCase();
+    const s = (screen || "").toLowerCase();
+    if (
+      t.includes("item") ||
+      t.includes("review") ||
+      t.includes("product") ||
+      s.includes("pending") ||
+      s.includes("review")
+    ) {
+      window.dispatchEvent(new CustomEvent("closete:refresh-pending-reviews"));
+    }
+    if (t.includes("order") || t.includes("payment") || s.includes("order")) {
+      window.dispatchEvent(new CustomEvent("closete:refresh-orders"));
+    }
+    if (t.includes("issue") || t.includes("dispute") || s.includes("issue")) {
+      window.dispatchEvent(new CustomEvent("closete:refresh-issues"));
+    }
+  };
+
+  // Foreground FCM listener
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+    onForegroundMessage((payload) => {
+      console.log("Foreground FCM notification received:", payload);
+      loadAlerts(true);
+      const title = payload.notification?.title || payload.data?.title || "Closeté Ops";
+      const body = payload.notification?.body || payload.data?.body || "New update received";
+      const dedupeKey =
+        payload.data?.id ||
+        payload.data?.notificationId ||
+        payload.data?.eventKey ||
+        payload.messageId ||
+        `${title}::${body}`;
+
+      showDesktopNotification(title, body, dedupeKey);
+      broadcastTableRefreshes(payload.data?.type, payload.data?.screen);
+    }).then((unsub) => {
+      if (unsub) unsubscribe = unsub;
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  // Socket.io real-time listener
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleNewNotification = (data: any) => {
+      console.log("[Socket] Real-time notification received:", data);
+      loadAlerts(true);
+      const title = data.title || "Closeté Ops";
+      const body = data.body || "New update received";
+      const dedupeKey =
+        data._id ||
+        data.id ||
+        data.eventKey ||
+        `${title}::${body}`;
+
+      showDesktopNotification(title, body, dedupeKey);
+      broadcastTableRefreshes(data.type, data.data?.screen);
+    };
+
+    socket.on("notification:new", handleNewNotification);
+
+    return () => {
+      socket.off("notification:new", handleNewNotification);
+    };
   }, []);
 
   // Click outside listener
@@ -254,6 +410,22 @@ export default function TopBarNotifications() {
               Unread ({unreadCount})
             </button>
           </div>
+
+          {/* Desktop Push Banner if not yet enabled */}
+          {pushPermission === "default" && (
+            <div className="px-3.5 py-2 bg-[#FFAF2C]/10 border-b border-[#FFAF2C]/20 flex items-center justify-between gap-2">
+              <span className="text-[11px] text-[#FFAF2C] font-normal leading-tight">
+                Enable desktop alerts for new reviews & orders
+              </span>
+              <button
+                onClick={handleEnablePush}
+                disabled={isRegisteringPush}
+                className="px-2.5 py-1 rounded text-[11px] font-medium bg-[#FFAF2C] text-black hover:bg-[#FFAF2C]/90 transition-colors disabled:opacity-50 shrink-0 cursor-pointer shadow-sm"
+              >
+                {isRegisteringPush ? "Enabling..." : "Enable"}
+              </button>
+            </div>
+          )}
 
           {/* Alert List — Clean scroll area with completely hidden/clean scrollbar */}
           <div className="max-h-76 overflow-y-auto divide-y divide-white/5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">

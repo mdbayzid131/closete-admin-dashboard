@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { adminApi } from "@/lib/api";
 import { formatImageUrl, formatFileUrl } from "@/lib/utils";
+import { getSocket } from "@/lib/socket";
 import { ProductImageSlider } from "./ProductImageSlider";
 import { ActionSuccessDialog } from "./ActionSuccessDialog";
 
@@ -359,25 +360,68 @@ export default function PendingReviewTable() {
   } | null>(null);
 
   // Fetch pending items dynamically from backend API
-  const fetchPendingItems = async () => {
-    setIsLoading(true);
+  const fetchPendingItems = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const res = await adminApi.getPendingProducts();
       if (res.success && Array.isArray(res.data)) {
         setItems(res.data);
-      } else {
+      } else if (!silent) {
         setItems([]);
       }
     } catch (e) {
       console.error("Error fetching pending review products:", e);
-      setItems([]);
+      if (!silent) setItems([]);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchPendingItems();
+
+    const handleRefresh = () => {
+      fetchPendingItems(true);
+    };
+
+    // Listen to custom window events triggered from TopBar / FCM
+    window.addEventListener("closete:refresh-pending-reviews", handleRefresh);
+    window.addEventListener("focus", handleRefresh);
+
+    // Direct Socket.io real-time listener for instantaneous 0ms update
+    const socket = getSocket();
+    const handleSocketNotif = (data: any) => {
+      const type = (data?.type || "").toLowerCase();
+      const screen = (data?.data?.screen || "").toLowerCase();
+      if (
+        type.includes("item") ||
+        type.includes("review") ||
+        type.includes("product") ||
+        screen.includes("pending") ||
+        screen.includes("review")
+      ) {
+        console.log("[PendingReviewTable] Real-time new product detected via socket, refreshing table...");
+        fetchPendingItems(true);
+      }
+    };
+
+    if (socket) {
+      socket.on("notification:new", handleSocketNotif);
+    }
+
+    // Periodic 10-second polling fallback
+    const interval = setInterval(() => {
+      fetchPendingItems(true);
+    }, 10000);
+
+    return () => {
+      window.removeEventListener("closete:refresh-pending-reviews", handleRefresh);
+      window.removeEventListener("focus", handleRefresh);
+      if (socket) {
+        socket.off("notification:new", handleSocketNotif);
+      }
+      clearInterval(interval);
+    };
   }, []);
 
   const openReviewDrawer = (item: PendingProduct) => {
