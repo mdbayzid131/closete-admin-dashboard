@@ -42,7 +42,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { adminApi } from "@/lib/api";
-import { formatImageUrl } from "@/lib/utils";
+import { formatImageUrl, formatFileUrl } from "@/lib/utils";
 import { ProductImageSlider } from "./ProductImageSlider";
 import { ActionSuccessDialog } from "./ActionSuccessDialog";
 
@@ -172,6 +172,47 @@ function PdfSolidIcon({ className }: { className?: string }) {
   );
 }
 
+function ProofImageIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#FFAF2C"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+    </svg>
+  );
+}
+
+function isProofPdf(url?: string): boolean {
+  if (!url) return true;
+  const cleanUrl = url.toLowerCase().split("?")[0];
+  return cleanUrl.endsWith(".pdf") || cleanUrl.includes(".pdf");
+}
+
+function getProofFileLabel(url?: string): string {
+  if (!url) return "Bill.pdf";
+  const cleanUrl = url.toLowerCase().split("?")[0];
+  if (cleanUrl.endsWith(".pdf") || cleanUrl.includes(".pdf")) {
+    return "Bill.pdf";
+  }
+  if (cleanUrl.endsWith(".jpg") || cleanUrl.endsWith(".jpeg")) {
+    return "Bill.jpg";
+  }
+  if (cleanUrl.endsWith(".png")) {
+    return "Bill.png";
+  }
+  return "Bill.img";
+}
+
 export interface PendingProduct {
   _id: string;
   name: string;
@@ -245,9 +286,13 @@ export default function PendingReviewTable() {
   const [drawerStep, setDrawerStep] = useState<"review" | "reject">("review");
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [isEditingDetails, setIsEditingDetails] = useState(false);
+  const [isProofModalOpen, setIsProofModalOpen] = useState(false);
+  const [proofImageError, setProofImageError] = useState(false);
 
   const handleCloseDrawer = () => {
     setSelectedItemState(null);
+    setIsProofModalOpen(false);
+    setProofImageError(false);
     if (closeTimeoutRef.current) {
       clearTimeout(closeTimeoutRef.current);
     }
@@ -365,7 +410,7 @@ export default function PendingReviewTable() {
     const itemToSuccess = {
       type: "approve" as const,
       itemName: editForm.name || selectedItem.name,
-      itemImage: selectedItem.images?.[0] || "/gucchi-bag.webp",
+      itemImage: selectedItem.images?.[0] || "",
       brand: editForm.brand || selectedItem.brand,
       price: editForm.price || selectedItem.price,
       id: selectedItem._id.slice(-6).toUpperCase(),
@@ -411,7 +456,7 @@ export default function PendingReviewTable() {
     const itemToSuccess = {
       type: "reject" as const,
       itemName: selectedItem.name,
-      itemImage: selectedItem.images?.[0] || "/gucchi-bag.webp",
+      itemImage: selectedItem.images?.[0] || "",
       brand: selectedItem.brand,
       price: selectedItem.price,
       id: selectedItem._id.slice(-6).toUpperCase(),
@@ -578,15 +623,19 @@ export default function PendingReviewTable() {
                   </div>
 
                   {/* Right Image Thumbnail */}
-                  <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden bg-[#FFFFFF0A] shrink-0 border border-[#FFFFFF1A]">
-                    <img
-                      src={formatImageUrl(item.images?.[0] || "/gucchi-bag.webp")}
-                      alt={item.name}
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src = "/gucchi-bag.webp";
-                      }}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
+                  <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden bg-[#FFFFFF0A] shrink-0 border border-[#FFFFFF1A] flex items-center justify-center">
+                    {item.images?.[0] ? (
+                      <img
+                        src={formatImageUrl(item.images[0])}
+                        alt={item.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-white/30 text-xs">
+                        <ProofImageIcon className="w-8 h-8 mb-1" />
+                        <span>No image</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -645,15 +694,16 @@ export default function PendingReviewTable() {
                 <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 no-scrollbar space-y-5">
                   {/* Product Preview Card */}
                   <div className="w-full bg-[#1A1A1D] rounded-2xl p-3.5 flex gap-3.5 items-center border border-white/[0.04]">
-                    <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-white/5 border border-white/10">
-                      <img
-                        src={formatImageUrl(selectedItem.images?.[0] || "/gucchi-bag.webp")}
-                        alt={selectedItem.name}
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = "/gucchi-bag.webp";
-                        }}
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-white/5 border border-white/10 flex items-center justify-center">
+                      {selectedItem.images?.[0] ? (
+                        <img
+                          src={formatImageUrl(selectedItem.images[0])}
+                          alt={selectedItem.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <ProofImageIcon className="w-6 h-6 text-white/40" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <span className="text-[#FFAF2C] font-semibold text-xs block mb-0.5">
@@ -1038,30 +1088,52 @@ export default function PendingReviewTable() {
                     className="rounded-xl px-4 py-3.5 flex items-center justify-between gap-4"
                   >
                     <span className="text-sm text-[#8C8C8C] shrink-0">Proof of purchase</span>
-                    <a
-                      href="#"
-                      onClick={(e) => e.preventDefault()}
-                      className="inline-flex items-center gap-1.5 hover:opacity-85 transition-opacity cursor-pointer group"
-                    >
-                      <PdfSolidIcon className="w-[18px] h-[18px] shrink-0" />
-                      <span className="text-sm font-medium text-[#FFAF2C]">
-                        {selectedItem.proofOfPurchase || "Bill.pdf"}
-                      </span>
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="#FFAF2C"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="shrink-0 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
-                      >
-                        <path d="M7 17L17 7" />
-                        <path d="M7 7h10v10" />
-                      </svg>
-                    </a>
+                    {selectedItem.proofOfPurchase ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProofImageError(false);
+                            setIsProofModalOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1.5 hover:opacity-85 transition-opacity cursor-pointer group text-left"
+                          title="Click to preview bill"
+                        >
+                          {isProofPdf(selectedItem.proofOfPurchase) ? (
+                            <PdfSolidIcon className="w-[18px] h-[18px] shrink-0" />
+                          ) : (
+                            <ProofImageIcon className="w-[18px] h-[18px] shrink-0" />
+                          )}
+                          <span className="text-sm font-medium text-[#FFAF2C] hover:underline">
+                            {getProofFileLabel(selectedItem.proofOfPurchase)}
+                          </span>
+                        </button>
+                        <a
+                          href={formatFileUrl(selectedItem.proofOfPurchase)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1 rounded-md text-[#FFAF2C] hover:bg-white/10 transition-colors"
+                          title="Open bill in new tab"
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="#FFAF2C"
+                            strokeWidth="2.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="shrink-0 hover:translate-x-0.5 hover:-translate-y-0.5 transition-transform"
+                          >
+                            <path d="M7 17L17 7" />
+                            <path d="M7 7h10v10" />
+                          </svg>
+                        </a>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-[#8C8C8C] italic">Not provided</span>
+                    )}
                   </div>
 
                   {/* Packaging Note (Dynamic: Available / Unavailable) */}
@@ -1216,6 +1288,108 @@ export default function PendingReviewTable() {
           buttonText="Back To Pending Review"
           onButtonClick={() => setActionSuccess(null)}
         />
+      )}
+
+      {/* Proof of Purchase Preview Modal */}
+      {selectedItem?.proofOfPurchase && (
+        <Dialog open={isProofModalOpen} onOpenChange={setIsProofModalOpen}>
+          <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col p-6 bg-[#161719] border border-white/10 text-white rounded-2xl shadow-2xl overflow-hidden z-[100]">
+            <DialogHeader className="flex flex-row items-center justify-between pb-4 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#FFAF2C]/10 flex items-center justify-center text-[#FFAF2C] border border-[#FFAF2C]/20 shrink-0">
+                  {isProofPdf(selectedItem.proofOfPurchase) ? (
+                    <PdfSolidIcon className="w-5 h-5" />
+                  ) : (
+                    <ProofImageIcon className="w-5 h-5" />
+                  )}
+                </div>
+                <div>
+                  <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
+                    Proof of Purchase ({isProofPdf(selectedItem.proofOfPurchase) ? "PDF" : "Image"})
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-[#8C8C8C] mt-0.5">
+                    {getProofFileLabel(selectedItem.proofOfPurchase)}
+                  </DialogDescription>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pr-6">
+                <a
+                  href={formatFileUrl(selectedItem.proofOfPurchase)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#2B2D32] hover:bg-[#383A40] text-[#FFAF2C] border border-white/10 transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Open in new tab
+                </a>
+              </div>
+            </DialogHeader>
+
+            <div className="flex-1 min-h-[480px] max-h-[68vh] w-full rounded-xl overflow-hidden bg-[#0F1012] border border-white/5 flex items-center justify-center relative p-2 my-2">
+              {(() => {
+                const proofUrl = formatFileUrl(selectedItem.proofOfPurchase);
+                const isPdf = isProofPdf(selectedItem.proofOfPurchase);
+
+                if (isPdf) {
+                  return (
+                    <iframe
+                      src={`${proofUrl}#toolbar=1`}
+                      className="w-full h-full min-h-[480px] rounded-lg border-0 bg-white"
+                      title="Proof of Purchase Preview"
+                    />
+                  );
+                }
+
+                if (proofImageError) {
+                  return (
+                    <div className="flex flex-col items-center justify-center p-8 text-center">
+                      <ProofImageIcon className="w-12 h-12 text-[#FFAF2C] mb-3 opacity-80" />
+                      <p className="text-sm font-medium text-white mb-1">
+                        Image Preview
+                      </p>
+                      <p className="text-xs text-[#8C8C8C] mb-4 max-w-sm">
+                        Click below to view the receipt directly in a full window.
+                      </p>
+                      <a
+                        href={proofUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-[#FFAF2C] text-black hover:bg-[#ffbe4f] transition-colors"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        Open Image in New Tab
+                      </a>
+                    </div>
+                  );
+                }
+
+                return (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={proofUrl}
+                    alt="Proof of Purchase"
+                    className="max-h-[65vh] max-w-full object-contain rounded-lg"
+                    crossOrigin="anonymous"
+                    referrerPolicy="no-referrer"
+                    onError={() => setProofImageError(true)}
+                  />
+                );
+              })()}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-white/10 text-xs text-[#8C8C8C]">
+              <span>Review document carefully before approving the listing.</span>
+              <button
+                type="button"
+                onClick={() => setIsProofModalOpen(false)}
+                className="px-4 py-2 rounded-lg bg-[#24262B] hover:bg-[#2F3238] text-white font-medium transition-colors"
+              >
+                Close Preview
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

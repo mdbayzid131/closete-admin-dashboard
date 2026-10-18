@@ -310,8 +310,8 @@ function IssuesIcon({ className }: { className?: string }) {
 }
 
 const items = [
-  { href: "/pending-review", label: "Pending Review", Icon: PendingReviewIcon },
   { href: "/all-orders", label: "All Orders", Icon: AllOrdersIcon },
+  { href: "/pending-review", label: "Pending Review", Icon: PendingReviewIcon },
   { href: "/awaiting-collection", label: "Awaiting Collection", Icon: AwaitingCollectionIcon },
   { href: "/collected", label: "Collected", Icon: CollectedIcon },
   { href: "/verified", label: "Verified", Icon: VerifiedIcon },

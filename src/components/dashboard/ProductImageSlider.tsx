@@ -47,9 +47,6 @@ export function ProductImageSlider({
                     <img
                       src={formatImageUrl(img)}
                       alt={`${itemName} - ${idx + 1}`}
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src = "/gucchi-bag.webp";
-                      }}
                       className="w-full h-full object-cover rounded-xl"
                     />
                   </div>
@@ -71,15 +68,16 @@ export function ProductImageSlider({
               />
             </button>
           </>
-        ) : (
+        ) : galleryImages[0] ? (
           <img
-            src={formatImageUrl(galleryImages[0] || "/gucchi-bag.webp")}
+            src={formatImageUrl(galleryImages[0])}
             alt={itemName}
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).src = "/gucchi-bag.webp";
-            }}
             className="w-full h-full object-cover rounded-xl"
           />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-white/5 rounded-xl text-white/30 text-xs">
+            No image
+          </div>
         )}
       </div>
 
