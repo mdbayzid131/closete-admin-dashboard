@@ -1,10 +1,10 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, X } from "lucide-react";
-import { clearAuthToken } from "@/lib/api";
+import { adminApi, clearAuthToken } from "@/lib/api";
 
 // Exact SVG Icons extracted directly from the Figma export files in "Closete UI Design File(3)"
 
@@ -330,6 +330,45 @@ export default function Sidebar({ active, mobileOpen = false, onMobileClose }: S
   const pathname = usePathname();
   const router = useRouter();
   const current = active ?? pathname ?? "";
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let disposed = false;
+    let revision = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = () => {
+      const requestRevision = ++revision;
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const result = await adminApi.getPendingProductCount();
+        const total = result.pagination?.total;
+        if (!disposed && revision === requestRevision && result.success &&
+            typeof total === "number" && Number.isFinite(total) && total >= 0) {
+          setPendingCount(total);
+        }
+      }, 200);
+    };
+    const receiveCount = (event: Event) => {
+      const total = (event as CustomEvent<number>).detail;
+      if (typeof total !== "number" || !Number.isFinite(total) || total < 0) return;
+      ++revision;
+      clearTimeout(timer);
+      setPendingCount(total);
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("closete:refresh-pending-reviews", refresh);
+    window.addEventListener("closete:pending-review-count-invalidated", refresh);
+    window.addEventListener("closete:pending-review-count", receiveCount);
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("closete:refresh-pending-reviews", refresh);
+      window.removeEventListener("closete:pending-review-count-invalidated", refresh);
+      window.removeEventListener("closete:pending-review-count", receiveCount);
+    };
+  }, [pathname]);
 
   const handleLogout = () => {
     clearAuthToken();
@@ -358,6 +397,17 @@ export default function Sidebar({ active, mobileOpen = false, onMobileClose }: S
             >
               <item.Icon className={cn("h-5 w-5 shrink-0", isActive ? "text-black" : "text-[#8C8C8C]")} />
               <span>{item.label}</span>
+              {item.href === "/pending-review" && pendingCount !== null && (
+                <span
+                  aria-label={`${pendingCount} items pending review`}
+                  className={cn(
+                    "ml-auto min-w-6 shrink-0 rounded-full px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums",
+                    isActive ? "bg-black/15 text-black" : "bg-white/10 text-white"
+                  )}
+                >
+                  {pendingCount}
+                </span>
+              )}
             </Link>
           );
         })}

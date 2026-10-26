@@ -366,6 +366,11 @@ export default function PendingReviewTable() {
       const res = await adminApi.getPendingProducts();
       if (res.success && Array.isArray(res.data)) {
         setItems(res.data);
+        if (typeof res.pagination?.total === "number") {
+          window.dispatchEvent(new CustomEvent("closete:pending-review-count", {
+            detail: res.pagination.total,
+          }));
+        }
       } else if (!silent) {
         setItems([]);
       }
@@ -475,6 +480,7 @@ export default function PendingReviewTable() {
 
       if (res.success) {
         setItems((prev) => prev.filter((p) => p._id !== selectedItem._id));
+        window.dispatchEvent(new Event("closete:pending-review-count-invalidated"));
         setActionSuccess(itemToSuccess);
         setSelectedItem(null);
         setDrawerStep("review");
@@ -512,6 +518,7 @@ export default function PendingReviewTable() {
 
       if (res.success) {
         setItems((prev) => prev.filter((p) => p._id !== selectedItem._id));
+        window.dispatchEvent(new Event("closete:pending-review-count-invalidated"));
         setActionSuccess(itemToSuccess);
         setSelectedItem(null);
         setDrawerStep("review");

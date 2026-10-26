@@ -24,7 +24,7 @@ export function clearAuthToken() {
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
-): Promise<{ success: boolean; data?: T; message?: string; error?: any }> {
+): Promise<{ success: boolean; data?: T; message?: string; error?: any; pagination?: { total: number } }> {
   const token = getAuthToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -59,6 +59,7 @@ async function request<T>(
       success: true,
       data: json.data !== undefined ? json.data : json,
       message: json.message,
+      pagination: json.pagination,
     };
   } catch (error: any) {
     return {
@@ -81,6 +82,9 @@ export const adminApi = {
   // Products / Moderation
   getPendingProducts: async () => {
     return request<any[]>("/products/admin/pending-review");
+  },
+  getPendingProductCount: async () => {
+    return request<unknown[]>("/products/admin/pending-review?limit=1&fields=_id");
   },
 
   getProductDetails: async (id: string) => {

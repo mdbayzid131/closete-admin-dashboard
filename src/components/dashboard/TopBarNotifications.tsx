@@ -356,7 +356,7 @@ export default function TopBarNotifications() {
 
         {/* Clean, calm badge — no pulse, no neon glow */}
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-[#FFAF2C]" />
+          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" />
         )}
       </button>
 
